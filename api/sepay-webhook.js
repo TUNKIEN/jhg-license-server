@@ -127,6 +127,33 @@ module.exports = async (req, res) => {
 
   console.log(`[SePay] License ${existing ? 'gia hạn' : 'tạo mới'}: ${email}, ${days} ngày, hết hạn ${expires_at.toISOString()}`)
 
+  // Gửi thông báo qua Discord webhook
+  if (process.env.DISCORD_WEBHOOK_URL) {
+    try {
+      const expDate = expires_at.toLocaleDateString('vi-VN')
+      await fetch(process.env.DISCORD_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          embeds: [{
+            title: '✅ Thanh toán thành công',
+            color: 0x4CAF50,
+            fields: [
+              { name: 'Email', value: email, inline: true },
+              { name: 'Gói', value: `${days} ngày`, inline: true },
+              { name: 'Số tiền', value: `${amount.toLocaleString()}đ`, inline: true },
+              { name: 'Hết hạn', value: expDate, inline: true },
+            ],
+            footer: { text: 'JHG Tool Payment' },
+            timestamp: new Date().toISOString()
+          }]
+        })
+      })
+    } catch (e) {
+      console.log('[SePay] Discord notify error:', e.message)
+    }
+  }
+
   return res.json({
     success: true,
     message: `License ${existing ? 'gia hạn' : 'tạo mới'} thành công`,
