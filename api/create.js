@@ -12,12 +12,15 @@ module.exports = async (req, res) => {
     return res.status(403).json({ success: false, message: 'unauthorized' })
   }
 
-  if (!email || !days) {
-    return res.status(400).json({ success: false, message: 'email and days required' })
+  if (!email) {
+    return res.status(400).json({ success: false, message: 'email required' })
   }
 
-  const expires_at = new Date()
-  expires_at.setDate(expires_at.getDate() + parseInt(days))
+  const daysNum = parseInt(days) || 0
+  const note = req.body.note || ''
+
+  const expires_at = daysNum > 0 ? new Date() : null
+  if (expires_at) expires_at.setDate(expires_at.getDate() + daysNum)
 
   // Upsert: tạo mới hoặc gia hạn nếu đã có
   const { data: existing } = await supabase
@@ -27,10 +30,14 @@ module.exports = async (req, res) => {
     .single()
 
   if (existing) {
-    // Gia hạn
+    // Gia hạn hoặc update note
+    const updateData = { status: 'active' }
+    if (expires_at) updateData.expires_at = expires_at.toISOString()
+    if (note) updateData.note = note
+
     const { error } = await supabase
       .from('licenses')
-      .update({ expires_at: expires_at.toISOString(), status: 'active' })
+      .update(updateData)
       .eq('email', email)
 
     if (error) {
@@ -39,9 +46,9 @@ module.exports = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Đã gia hạn',
+      message: expires_at ? 'Đã gia hạn' : 'Đã cập nhật',
       email,
-      expires_at: expires_at.toISOString()
+      expires_at: expires_at ? expires_at.toISOString() : null
     })
   }
 
@@ -50,8 +57,9 @@ module.exports = async (req, res) => {
     .from('licenses')
     .insert({
       email,
-      status: 'active',
-      expires_at: expires_at.toISOString()
+      status: daysNum > 0 ? 'active' : 'pending',
+      expires_at: expires_at ? expires_at.toISOString() : null,
+      note
     })
 
   if (error) {
