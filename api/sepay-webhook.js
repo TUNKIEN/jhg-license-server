@@ -35,10 +35,24 @@ function getDays(amount) {
   return 0
 }
 
-function extractEmail(content) {
-  // Tìm email trong nội dung chuyển khoản
-  const match = content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
-  return match ? match[0].toLowerCase() : null
+async function extractEmail(content) {
+  // Cách 1: Tìm email trực tiếp trong nội dung
+  const emailMatch = content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+  if (emailMatch) return emailMatch[0].toLowerCase()
+
+  // Cách 2: Tìm mã JHG trong nội dung → tra DB tìm email
+  const codeMatch = content.match(/JHG[A-Z0-9]+/i)
+  if (codeMatch) {
+    const code = codeMatch[0].toUpperCase()
+    const { data } = await supabase
+      .from('licenses')
+      .select('email')
+      .like('note', `%${code}%`)
+      .single()
+    if (data) return data.email
+  }
+
+  return null
 }
 
 module.exports = async (req, res) => {
@@ -64,7 +78,7 @@ module.exports = async (req, res) => {
   const content = (body.content || '').trim()
 
   // Tìm email trong nội dung
-  const email = extractEmail(content)
+  const email = await extractEmail(content)
   if (!email) {
     console.log('[SePay] Không tìm thấy email trong nội dung:', content)
     return res.json({ success: false, message: 'no email found in content' })
