@@ -164,45 +164,30 @@ module.exports = async (req, res) => {
     }
   }
 
-  // 2. Gửi DM cho user qua Discord Bot
-  if (discordUserId && process.env.DISCORD_BOT_TOKEN) {
+  // 2. Gửi thông báo cho USER trong channel thanh toán (mention)
+  if (discordUserId && process.env.DISCORD_WEBHOOK_URL) {
     try {
-      // Tạo DM channel
-      const dmRes = await fetch(`https://discord.com/api/v10/users/@me/channels`, {
+      await fetch(process.env.DISCORD_WEBHOOK_URL, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ recipient_id: discordUserId })
-      })
-      const dmChannel = await dmRes.json()
-
-      if (dmChannel.id) {
-        await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            embeds: [{
-              title: '✅ Thanh toán thành công!',
-              description: 'Cảm ơn bạn đã mua JHG Tool. License đã được kích hoạt.',
-              color: 0x4CAF50,
-              fields: [
-                { name: 'Email', value: email, inline: true },
-                { name: 'Gói', value: `${days} ngày`, inline: true },
-                { name: 'Hết hạn', value: expDate, inline: true },
-              ],
-              footer: { text: 'Mở JHGTOOL → nhập email để bắt đầu sử dụng' },
-              timestamp: new Date().toISOString()
-            }]
-          })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `<@${discordUserId}>`,
+          embeds: [{
+            title: '✅ Thanh toán thành công!',
+            description: 'License đã được kích hoạt. Mở JHGTOOL → nhập email để sử dụng.',
+            color: 0x4CAF50,
+            fields: [
+              { name: 'Email', value: email, inline: true },
+              { name: 'Gói', value: `${days} ngày`, inline: true },
+              { name: 'Hết hạn', value: expDate, inline: true },
+            ],
+            footer: { text: 'JHG Tool Payment' },
+            timestamp: new Date().toISOString()
+          }]
         })
-      }
+      })
     } catch (e) {
-      console.log('[SePay] DM user error:', e.message)
+      console.log('[SePay] User notify error:', e.message)
     }
   }
 
