@@ -20,10 +20,10 @@ const supabase = require('../lib/supabase')
 
 // Giá và số ngày tương ứng
 const PRICE_PLANS = [
-  { min: 450000, max: 550000, days: 30 },       // 500k = 1 tháng
-  { min: 1450000, max: 1550000, days: 90 },     // 1.5tr = 3 tháng
-  { min: 2950000, max: 3050000, days: 180 },    // 3tr = 6 tháng
-  { min: 5950000, max: Infinity, days: 365 },   // 6tr+ = 1 năm
+  { min: 490000, max: 999999, days: 30 },        // 490k-999k = 1 tháng
+  { min: 1000000, max: 1999999, days: 90 },      // 1tr-1.99tr = 3 tháng
+  { min: 2000000, max: 3999999, days: 180 },     // 2tr-3.99tr = 6 tháng
+  { min: 4000000, max: Infinity, days: 365 },    // 4tr+ = 1 năm
 ]
 
 function getDays(amount) {
@@ -76,6 +76,18 @@ module.exports = async (req, res) => {
   const body = req.body
   console.log('[SePay Webhook]', JSON.stringify(body))
 
+  // Chống duplicate: check transaction ID hoặc reference
+  const txnId = body.id || body.referenceNumber || `${body.transactionDate}_${body.transferAmount}_${body.content}`
+  const { data: existingTxn } = await supabase
+    .from('licenses')
+    .select('id')
+    .like('note', `%txn:${txnId}%`)
+    .single()
+  if (existingTxn) {
+    console.log('[SePay] Duplicate webhook, bỏ qua:', txnId)
+    return res.json({ success: true, message: 'duplicate ignored' })
+  }
+
   // Chỉ xử lý giao dịch tiền vào
   if (body.transferType !== 'in') {
     return res.json({ success: true, message: 'ignored (not incoming)' })
@@ -119,7 +131,7 @@ module.exports = async (req, res) => {
   if (existing) {
     await supabase
       .from('licenses')
-      .update({ expires_at: expires_at.toISOString(), status: 'active' })
+      .update({ expires_at: expires_at.toISOString(), status: 'active', note: `SePay ${amount}đ txn:${txnId}` })
       .eq('email', email)
   } else {
     await supabase
@@ -128,7 +140,7 @@ module.exports = async (req, res) => {
         email,
         status: 'active',
         expires_at: expires_at.toISOString(),
-        note: `SePay auto - ${amount}đ`
+        note: `SePay ${amount}đ txn:${txnId}`
       })
   }
 
