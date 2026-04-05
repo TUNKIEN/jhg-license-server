@@ -203,6 +203,23 @@ module.exports = async (req, res) => {
     }
   }
 
+  // 3. Cấp role cho user trong Discord server
+  if (discordUserId && process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID) {
+    try {
+      const ROLE_ID = '1366362020017995887'
+      await fetch(`https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${discordUserId}/roles/${ROLE_ID}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      console.log(`[SePay] Đã cấp role cho user ${discordUserId}`)
+    } catch (e) {
+      console.log('[SePay] Cấp role lỗi:', e.message)
+    }
+  }
+
   return res.json({
     success: true,
     message: `License ${existing ? 'gia hạn' : 'tạo mới'} thành công`,
