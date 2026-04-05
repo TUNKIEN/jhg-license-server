@@ -35,24 +35,31 @@ function getDays(amount) {
   return 0
 }
 
-async function extractEmail(content) {
+async function extractEmailAndDiscord(content) {
+  let discordUserId = null
+
   // Cách 1: Tìm email trực tiếp trong nội dung
   const emailMatch = content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
-  if (emailMatch) return emailMatch[0].toLowerCase()
+  if (emailMatch) return { email: emailMatch[0].toLowerCase(), discordUserId }
 
-  // Cách 2: Tìm mã JHG trong nội dung → tra DB tìm email
+  // Cách 2: Tìm mã JHG trong nội dung → tra DB tìm email + discord ID
   const codeMatch = content.match(/JHG[A-Z0-9]+/i)
   if (codeMatch) {
     const code = codeMatch[0].toUpperCase()
     const { data } = await supabase
       .from('licenses')
-      .select('email')
+      .select('email, note')
       .like('note', `%${code}%`)
       .single()
-    if (data) return data.email
+    if (data) {
+      // Extract discord ID từ note: "pending:JHGXXX:discord:123456"
+      const discordMatch = (data.note || '').match(/discord:(\d+)/)
+      if (discordMatch) discordUserId = discordMatch[1]
+      return { email: data.email, discordUserId }
+    }
   }
 
-  return null
+  return { email: null, discordUserId: null }
 }
 
 module.exports = async (req, res) => {
@@ -77,8 +84,8 @@ module.exports = async (req, res) => {
   const amount = parseInt(body.transferAmount) || 0
   const content = (body.content || '').trim()
 
-  // Tìm email trong nội dung
-  const email = await extractEmail(content)
+  // Tìm email + discord user ID trong nội dung
+  const { email, discordUserId } = await extractEmailAndDiscord(content)
   if (!email) {
     console.log('[SePay] Không tìm thấy email trong nội dung:', content)
     return res.json({ success: false, message: 'no email found in content' })
@@ -127,30 +134,75 @@ module.exports = async (req, res) => {
 
   console.log(`[SePay] License ${existing ? 'gia hạn' : 'tạo mới'}: ${email}, ${days} ngày, hết hạn ${expires_at.toISOString()}`)
 
-  // Gửi thông báo qua Discord webhook
+  const expDate = expires_at.toLocaleDateString('vi-VN')
+
+  // 1. Gửi thông báo cho ADMIN (webhook channel admin)
   if (process.env.DISCORD_WEBHOOK_URL) {
     try {
-      const expDate = expires_at.toLocaleDateString('vi-VN')
       await fetch(process.env.DISCORD_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           embeds: [{
-            title: '✅ Thanh toán thành công',
-            color: 0x4CAF50,
+            title: '💰 Có người thanh toán mới',
+            color: 0xFF9800,
             fields: [
               { name: 'Email', value: email, inline: true },
-              { name: 'Gói', value: `${days} ngày`, inline: true },
+              { name: 'User Discord', value: discordUserId ? `<@${discordUserId}>` : 'N/A', inline: true },
               { name: 'Số tiền', value: `${amount.toLocaleString()}đ`, inline: true },
+              { name: 'Gói', value: `${days} ngày`, inline: true },
               { name: 'Hết hạn', value: expDate, inline: true },
+              { name: 'Loại', value: existing ? 'Gia hạn' : 'Mới', inline: true },
             ],
-            footer: { text: 'JHG Tool Payment' },
+            footer: { text: 'JHG Tool Payment - Admin' },
             timestamp: new Date().toISOString()
           }]
         })
       })
     } catch (e) {
-      console.log('[SePay] Discord notify error:', e.message)
+      console.log('[SePay] Admin notify error:', e.message)
+    }
+  }
+
+  // 2. Gửi DM cho user qua Discord Bot
+  if (discordUserId && process.env.DISCORD_BOT_TOKEN) {
+    try {
+      // Tạo DM channel
+      const dmRes = await fetch(`https://discord.com/api/v10/users/@me/channels`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ recipient_id: discordUserId })
+      })
+      const dmChannel = await dmRes.json()
+
+      if (dmChannel.id) {
+        await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            embeds: [{
+              title: '✅ Thanh toán thành công!',
+              description: 'Cảm ơn bạn đã mua JHG Tool. License đã được kích hoạt.',
+              color: 0x4CAF50,
+              fields: [
+                { name: 'Email', value: email, inline: true },
+                { name: 'Gói', value: `${days} ngày`, inline: true },
+                { name: 'Hết hạn', value: expDate, inline: true },
+              ],
+              footer: { text: 'Mở JHGTOOL → nhập email để bắt đầu sử dụng' },
+              timestamp: new Date().toISOString()
+            }]
+          })
+        })
+      }
+    } catch (e) {
+      console.log('[SePay] DM user error:', e.message)
     }
   }
 
