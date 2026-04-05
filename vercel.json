@@ -2,5 +2,11 @@
   "version": 2,
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" }
+  ],
+  "crons": [
+    {
+      "path": "/api/check-expired?secret=jhg_admin_2026",
+      "schedule": "0 0 * * *"
+    }
   ]
 }

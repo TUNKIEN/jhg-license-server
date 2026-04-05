@@ -131,7 +131,7 @@ module.exports = async (req, res) => {
   if (existing) {
     await supabase
       .from('licenses')
-      .update({ expires_at: expires_at.toISOString(), status: 'active', note: `SePay ${amount}đ txn:${txnId}` })
+      .update({ expires_at: expires_at.toISOString(), status: 'active', note: `SePay ${amount}đ txn:${txnId}${discordUserId ? ' discord:' + discordUserId : ''}` })
       .eq('email', email)
   } else {
     await supabase
@@ -140,7 +140,7 @@ module.exports = async (req, res) => {
         email,
         status: 'active',
         expires_at: expires_at.toISOString(),
-        note: `SePay ${amount}đ txn:${txnId}`
+        note: `SePay ${amount}đ txn:${txnId}${discordUserId ? ' discord:' + discordUserId : ''}`
       })
   }
 
