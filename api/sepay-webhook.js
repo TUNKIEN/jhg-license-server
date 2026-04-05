@@ -20,10 +20,10 @@ const supabase = require('../lib/supabase')
 
 // Giá và số ngày tương ứng
 const PRICE_PLANS = [
-  { min: 450000, max: 600000, days: 30 },      // 500k = 30 ngày
-  { min: 1100000, max: 1300000, days: 90 },    // 1.2tr = 90 ngày
-  { min: 1900000, max: 2100000, days: 180 },   // 2tr = 180 ngày
-  { min: 3400000, max: Infinity, days: 365 },  // 3.5tr+ = 1 năm
+  { min: 450000, max: 550000, days: 30 },       // 500k = 1 tháng
+  { min: 1450000, max: 1550000, days: 90 },     // 1.5tr = 3 tháng
+  { min: 2950000, max: 3050000, days: 180 },    // 3tr = 6 tháng
+  { min: 5950000, max: Infinity, days: 365 },   // 6tr+ = 1 năm
 ]
 
 function getDays(amount) {
