@@ -70,6 +70,6 @@ module.exports = async (req, res) => {
     success: true,
     message: 'Đã tạo license',
     email,
-    expires_at: expires_at.toISOString()
+    expires_at: expires_at ? expires_at.toISOString() : null
   })
 }
